@@ -55,6 +55,7 @@ lev()
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define MAXLINE 81               /* Input buffer size */
 #define MAXNAME 31               /* File name size */
@@ -85,13 +86,14 @@ typedef struct n_struc {
 } NSTRUC;                     
 
 /*----------------- Command definitions ----------------------------------*/
-#define NUMFUNCS 4
-int cread(), pc(), help(), quit();
+#define NUMFUNCS 5
+int cread(), pc(), help(), quit(), lev();
 struct cmdstruc command[NUMFUNCS] = {
    {"READ", cread, EXEC},
    {"PC", pc, CKTLD},
    {"HELP", help, EXEC},
    {"QUIT", quit, EXEC},
+   {"LEV", lev, CKTLD},
 };
 
 /*------------------------------------------------------------------------*/
@@ -103,6 +105,7 @@ int Nnodes;                     /* number of nodes */
 int Npi;                        /* number of primary inputs */
 int Npo;                        /* number of primary outputs */
 int Done = 0;                   /* status bit to terminate program */
+char CircuitName[MAXLINE-MAXNAME];
 /*------------------------------------------------------------------------*/
 
 /*-----------------------------------------------------------------------
@@ -176,29 +179,30 @@ char *cp;
       printf("File %s does not exist!\n", buf);
       return;
    }
+   strcpy(CircuitName,buf);
    if(Gstate >= CKTLD) clear();
    Nnodes = Npi = Npo = ntbl = 0;
    while(fgets(buf, MAXLINE, fd) != NULL) {
       if(sscanf(buf,"%d %d", &tp, &nd) == 2) {
-         if(ntbl < nd) ntbl = nd;
+         if(ntbl < nd) ntbl = nd; // nd is node id 
          Nnodes ++;
-         if(tp == PI) Npi++;
-         else if(tp == PO) Npo++;
+         if(tp == PI) Npi++; // counts number of primary inputs 
+         else if(tp == PO) Npo++; // counts number of primary outputs 
       }
    }
-   tbl = (int *) malloc(++ntbl * sizeof(int));
+   tbl = (int *) malloc(++ntbl * sizeof(int)); // dumb why not use nodes creates intager table 
 
-   fseek(fd, 0L, 0);
+   fseek(fd, 0L, 0); // ol means 0 
    i = 0;
    while(fgets(buf, MAXLINE, fd) != NULL) {
-      if(sscanf(buf,"%d %d", &tp, &nd) == 2) tbl[nd] = i++;
+      if(sscanf(buf,"%d %d", &tp, &nd) == 2) tbl[nd] = i++;   // why sscanf setting index of table sort by nd 
    }
-   allocate();
+   allocate(); /// creates node araay 
 
    fseek(fd, 0L, 0);
    while(fscanf(fd, "%d %d", &tp, &nd) != EOF) {
-      np = &Node[tbl[nd]];
-      np->num = nd;
+      np = &Node[tbl[nd]];   // points at specific node 
+      np->num = nd; // loads nd into that noad
       if(tp == PI) Pinput[ni++] = np;
       else if(tp == PO) Poutput[no++] = np;
       switch(tp) {
@@ -298,7 +302,11 @@ output: nothing
 called by: main 
 description:
   Set Done to 1 which will terminates the program.
------------------------------------------------------------------------*/
+---------------------------------locates dynamic data arrays, and fills in the structural information
+  of the circuit. In the ISCAS circuit description format, only upstream
+  nodes are specified. Downstream nodes are implied. However, to facilitate
+  forward implication, they are also built up in the data structure.
+  To have the maximal flexibility, three passes --------------------------------------*/
 quit()
 {
    Done = 1;
@@ -372,6 +380,72 @@ int tp;
       case 5: return("NOT");
       case 6: return("NAND");
       case 7: return("AND");
+   }
+}
+
+int setlev(NSTRUC *np, int current_level)
+{
+   //printf("current = %d      dest = %d", current_level,np->level);
+   if(np->level < current_level)
+   {
+      np->level = current_level;
+      return 1;
+   }
+   return 0;
+}
+
+
+bset(NSTRUC *sourceNode)
+{
+   for(int i = 0; i < sourceNode->fout; i++)
+   {
+      NSTRUC *destNode = sourceNode->dnodes[i];
+      //printf("destnode num %d\n",destNode->num);
+      //printf("type num %d\n",destNode->type);
+      int fixpath = setlev(destNode, sourceNode->level + 1);
+      if(fixpath) bset(destNode);
+   }
+}
+
+lev(cp)
+char *cp;
+{
+   char buf[MAXLINE];
+   char num[45];
+   for (int i = 0; i<Nnodes; i++)
+   {
+      Node[i].level = -1;
+   }
+
+   for (int i = 0; i<Npi; i++)
+   {
+      Pinput[i]->level = 0;
+      bset(Pinput[i]);
+      
+   }
+      if(sscanf(cp, "%s", buf) == 1)
+      {
+         FILE *fd = fopen(buf,"w");
+         CircuitName[strlen(CircuitName)-1] = '\0';
+         CircuitName[strlen(CircuitName)-1] = '\0';
+         CircuitName[strlen(CircuitName)-1] = '\0';
+         CircuitName[strlen(CircuitName)-1] = '\0';
+         fputs(CircuitName,fd);
+         sprintf(num,"\n#PI: %d",Npi);
+         fputs(num,fd);
+         sprintf(num,"\n#PO: %d",Npo);
+         fputs(num,fd);
+         sprintf(num,"\n#PO: %d",Nnodes);
+         fputs(num,fd);
+         fclose(fd);
+
+      }
+      
+      
+      for (int i = 0; i<Nnodes; i++)
+   {
+      printf("Node %d level %d\n",Node[i].num, Node[i].level);
+
    }
 }
 /*========================= End of program ============================*/
