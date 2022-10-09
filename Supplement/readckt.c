@@ -106,6 +106,7 @@ int Npi;                        /* number of primary inputs */
 int Npo;                        /* number of primary outputs */
 int Done = 0;                   /* status bit to terminate program */
 char CircuitName[MAXLINE-MAXNAME];
+char CircuitNameCopy[MAXLINE-MAXNAME];
 /*------------------------------------------------------------------------*/
 
 /*-----------------------------------------------------------------------
@@ -190,12 +191,12 @@ char *cp;
          else if(tp == PO) Npo++; // counts number of primary outputs 
       }
    }
-   tbl = (int *) malloc(++ntbl * sizeof(int)); // dumb why not use nodes creates intager table 
+   tbl = (int *) malloc(++ntbl * sizeof(int)); 
 
    fseek(fd, 0L, 0); // ol means 0 
    i = 0;
    while(fgets(buf, MAXLINE, fd) != NULL) {
-      if(sscanf(buf,"%d %d", &tp, &nd) == 2) tbl[nd] = i++;   // why sscanf setting index of table sort by nd 
+      if(sscanf(buf,"%d %d", &tp, &nd) == 2) tbl[nd] = i++;   
    }
    allocate(); /// creates node araay 
 
@@ -385,7 +386,6 @@ int tp;
 
 int setlev(NSTRUC *np, int current_level)
 {
-   //printf("current = %d      dest = %d", current_level,np->level);
    if(np->level < current_level)
    {
       np->level = current_level;
@@ -400,21 +400,59 @@ bset(NSTRUC *sourceNode)
    for(int i = 0; i < sourceNode->fout; i++)
    {
       NSTRUC *destNode = sourceNode->dnodes[i];
-      //printf("destnode num %d\n",destNode->num);
-      //printf("type num %d\n",destNode->type);
       int fixpath = setlev(destNode, sourceNode->level + 1);
       if(fixpath) bset(destNode);
    }
 }
 
+int check(NSTRUC *destnode)
+{
+   //printf("visted %d\n",destnode->num);
+   for(int i = 0; i < destnode->fin; i++)
+   {
+      if(destnode->unodes[i]->level >= destnode->level)
+      {
+         //printf("%d did not set %d\n",destnode->unodes[i]->num,destnode->num);
+         destnode->level = destnode->unodes[i]->level + 1;
+         return 0;
+      } 
+   }
+   return 1;
+}
+
+
+
 lev(cp)
 char *cp;
 {
    char buf[MAXLINE];
-   char num[45];
+   char num[MAXLINE];
+   int gates = 0;
    for (int i = 0; i<Nnodes; i++)
    {
       Node[i].level = -1;
+      if((Node[i].type != 0) && (Node[i].type != 1)) gates++;
+   }
+   
+
+   for (int i = 0; i<Npi; i++)
+   {
+      Pinput[i]->level = 0;
+      bset(Pinput[i]);
+      
+   }
+
+   for(int i=0; i<Nnodes; i++)
+   {
+      int good = 1;
+      do
+      {
+         good &=check(&Node[i])
+         if(good == 0)
+         {
+            i = 0;
+         }
+      }while(good);
    }
 
    for (int i = 0; i<Npi; i++)
@@ -423,30 +461,44 @@ char *cp;
       bset(Pinput[i]);
       
    }
+
       if(sscanf(cp, "%s", buf) == 1)
       {
          FILE *fd = fopen(buf,"w");
-         CircuitName[strlen(CircuitName)-1] = '\0';
-         CircuitName[strlen(CircuitName)-1] = '\0';
-         CircuitName[strlen(CircuitName)-1] = '\0';
-         CircuitName[strlen(CircuitName)-1] = '\0';
-         fputs(CircuitName,fd);
+         strcpy(CircuitNameCopy,CircuitName);
+         CircuitNameCopy[strlen(CircuitNameCopy)-1] = '\0';
+         CircuitNameCopy[strlen(CircuitNameCopy)-1] = '\0';
+         CircuitNameCopy[strlen(CircuitNameCopy)-1] = '\0';
+         CircuitNameCopy[strlen(CircuitNameCopy)-1] = '\0';
+         fputs(CircuitNameCopy,fd);
          sprintf(num,"\n#PI: %d",Npi);
          fputs(num,fd);
          sprintf(num,"\n#PO: %d",Npo);
          fputs(num,fd);
-         sprintf(num,"\n#PO: %d",Nnodes);
+         sprintf(num,"\n#Nodes: %d",Nnodes);
          fputs(num,fd);
+         sprintf(num,"\n#Gates: %d",gates);
+         fputs(num,fd);
+         for (int i = 0; i<Nnodes; i++)
+         {
+            sprintf(num,"\n%d %d",Node[i].num,Node[i].level);
+            fputs(num,fd);
+         }
+	      const char nl[]= "\n";
+         fputs(nl,fd);
          fclose(fd);
-
       }
+
+
+      printf("\ndone\n");
       
-      
+   /*   
       for (int i = 0; i<Nnodes; i++)
    {
       printf("Node %d level %d\n",Node[i].num, Node[i].level);
 
    }
+   */
 }
 /*========================= End of program ============================*/
 

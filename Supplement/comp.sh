@@ -1,0 +1,1 @@
+diff c880_synV1_vpersonal.log c880_synV1_v_output.log
